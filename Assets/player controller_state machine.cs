@@ -1,5 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Collections;
+
 
 public class PlayerController : MonoBehaviour
 {
@@ -29,10 +31,21 @@ public class PlayerController : MonoBehaviour
 
     bool canCutToSmall = false;
 
-
+	
 
     [SerializeField] float airAccel = 20f;
     [SerializeField] float airDecel = 55f;
+
+    [SerializeField] private TMPro.TMP_Text deathText; // デス数カウント
+    private int deathCount = 0;
+
+    [SerializeField] private float respawnLockTime = 0.1f;//リスポーン後ロック
+
+    [SerializeField] private TMPro.TMP_Text playTimeText;
+    private float playTime; // 秒
+
+    private const string KEY_DEATH = "CLEAR_DEATH";
+    private const string KEY_TIME  = "CLEAR_TIME";
 
     
     // ===== 壁キック =====
@@ -116,6 +129,7 @@ Queue<PositionSnapshot> positionHistory = new Queue<PositionSnapshot>();
 
     void Start()
     {
+	UpdateDeathUI();
 	spawnPosition = rb.position;
         // 初期状態決定
         if (CheckGrounded())
@@ -138,6 +152,7 @@ Queue<PositionSnapshot> positionHistory = new Queue<PositionSnapshot>();
 
     void Update()
     {
+	playTime += Time.deltaTime;
 	if (isControlLocked)
 		return;
 
@@ -296,7 +311,21 @@ Queue<PositionSnapshot> positionHistory = new Queue<PositionSnapshot>();
             isRewindLocked = false;
         }
 
+	//Rでリスポーン
+	if (Input.GetKeyDown(KeyCode.R))
+	{
+    		Respawn();
+	}
+
+	UpdatePlayTimeUI();
+
+
     }
+//Updateはここまで
+
+
+
+
 
     // ===== 状態処理 =====
 
@@ -584,8 +613,12 @@ Queue<PositionSnapshot> positionHistory = new Queue<PositionSnapshot>();
         }
         else if (other.gameObject.layer == LayerMask.NameToLayer("Goal"))
         {
-            Debug.Log("GOAL!");
-            // ここにクリア処理
+            // ★クリア結果を保存
+            PlayerPrefs.SetInt(KEY_DEATH, deathCount);
+	    PlayerPrefs.SetFloat(KEY_TIME, playTime);
+	    PlayerPrefs.Save();
+	    // ★クリア画面へ遷移（ここを追加）
+            UnityEngine.SceneManagement.SceneManager.LoadScene("Clear");
         }
 	else if (other.gameObject.layer == LayerMask.NameToLayer("Checkpoint"))
 	{
@@ -615,9 +648,34 @@ Queue<PositionSnapshot> positionHistory = new Queue<PositionSnapshot>();
 
     	// rb.MovePosition(spawnPosition); // 必要ならこっちに変更
 
-    	state = PlayerState.Air; // ここはあなたの設計でOK
+    	state = PlayerState.Air; 
+	deathCount++;
+	UpdateDeathUI();
+	isControlLocked = true;
+	StartCoroutine(UnlockControlAfterRespawn());
 	}
 
+	private void UpdateDeathUI()
+	{
+	Debug.Log($"deathText is {(deathText == null ? "NULL" : "SET")} / deathCount={deathCount}");
+    	if (deathText != null)
+        	deathText.text = $"DEATH: {deathCount}";
+	}
+
+	private IEnumerator UnlockControlAfterRespawn()//リスポーンロック解除用コルーチン
+	{
+    		yield return new WaitForSeconds(respawnLockTime);
+    		isControlLocked = false;
+	}
+
+	private void UpdatePlayTimeUI()
+	{
+    	int totalSeconds = Mathf.FloorToInt(playTime);
+    	int minutes = totalSeconds / 60;
+    	int seconds = totalSeconds % 60;
+
+    	playTimeText.text = $"{minutes:00}:{seconds:00}";
+	}
 
 
 
